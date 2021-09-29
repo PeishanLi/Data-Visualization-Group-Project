@@ -1,0 +1,127 @@
+---
+title: "Network Analysis of governors from each state who mention Biden/Trump on Twitter (Part 4)"
+author: "Xiaofan Liu"
+output:
+  html_notebook: null
+  toc: yes
+  theme: journal
+  html_document:
+    code_folding: hide
+    df_print: paged
+font-family: Helvetica
+autosize: yes
+---
+<style>
+body{ /* Normal */
+font-size: 15px;
+color: black;
+}
+write {  
+line-height: 7em;
+}
+table { /* Table */
+font-size: 12px;
+}
+h1 { /* Header 1 */
+font-size: 30px;
+}
+h2 { /* Header 2 *
+font-size: 26px;
+}
+h3 { /* Header 3 */
+font-size: 22px;
+}
+code.r{ /* Code block */
+font-size: 14px;
+}
+pre { /* Code block */
+font-size: 14px
+}
+.main-container {
+    width: 80%;
+    max-width: unset;
+}
+</style>
+```{r import data, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+library("knitr")
+knitr::opts_chunk$set(echo = TRUE, eval=TRUE, message=FALSE, warning = FALSE)
+```
+#Install data and data package
+```{r}
+d=read.csv(file.choose()) #choose the "governors_twitter" file
+governor_tweets <- readRDS("governor_tweets.RDS") #choose the "governor_tweets" file
+library(igraph)
+library(ggraph)
+library(network)
+library(ggnetwork)
+library(ggplot2)
+library(tidyverse) 
+
+```
+Network Analysis of governors from each state who mention Biden/Trump on Twitter
+
+We would also like to investigate the relationship between governors and Biden/Trump. We collected around 1,000 tweets from Twitter from 2020.6 to now and focus on governors from each state who mention Biden/Trump on their Twitter accounts.
+
+The hypothesis is that governors from the same party with Biden/Trump will mention him more than governors from the opposite party. We also make a further assumption that states that governors mention Trump more will have higher number of COVID-19 cases than states that governors mention Biden more.
+
+1. The network of governors who mention Biden on Twitter
+```{r,fig.height=20,fig.width=20}
+#Biden
+mention.Biden <- unnest(governor_tweets, mentions_screen_name)%>% filter(mentions_screen_name == "JoeBiden")
+mention_Biden <- subset(mention.Biden, select=c(screen_name, mentions_screen_name))
+d.Biden <- mention_Biden %>% left_join(., d, by=c('screen_name'='twitter_handle'))
+
+g1 <- graph_from_data_frame(d.Biden , directed = TRUE)
+
+weight<-table(d.Biden$mentions_screen_name)
+degree=igraph::degree(g1, mode = 'all')
+
+plot(g1, 
+     edge.color = "grey",
+     edge.size = sqrt(weight+1),
+     vertex.color = ifelse( d.Biden$party == "D" , 
+                     "blue", "red"),
+     vertex.size = sqrt(degree+1),
+     edge.arrow.size = 0.05,
+     vertex.label.cex = 2,
+     vertex.label.color = "black",
+     layout = layout_nicely(g1),
+     main = "The network of governors who mention Biden on Twitter")
+
+```
+In the graph above, the node size is determined by degree centrality, the node color is determined by parties (blue for Democrats and red for Republicans), the edge size is determined by the number of mentions between two nodes. 
+We can learn that GovPritzker and GavinNewsom have mentioned Biden the most times on Twitter. In other words, the relationship strength between them is strong. Most governors mentioned Biden on Twitter are Democrats, which are in the same party with Biden. 
+
+2. The network of governors who mention Trump
+```{r,fig.height=20,fig.width=20}
+#Trump
+mention.Trump <- unnest(governor_tweets, mentions_screen_name)%>% filter(mentions_screen_name == "realDonaldTrump")
+
+mention_Trump <- subset(mention.Trump, select=c(screen_name, mentions_screen_name))
+d.Trump <- mention_Trump %>% left_join(., d, by=c('screen_name'='twitter_handle'))
+g2 <- graph_from_data_frame(d.Trump , directed = TRUE)
+
+weight<-table(d.Trump$mentions_screen_name)
+degree=igraph::degree(g2, mode = 'all')
+
+plot(g2,
+     edge.color = "grey",
+     edge.size = sqrt(weight+1),
+     vertex.color = ifelse( d.Trump$party == "D" , 
+                     "blue", "red"),
+     vertex.size = sqrt(degree+1), 
+     edge.arrow.size = 0.05,
+     vertex.label.cex = 2,
+     vertex.label.color = "black",
+     layout = layout_nicely(g2),
+     main = "The network of governors who mention Trump on Twitter")
+     
+```
+In the graph above, the node size is determined by degree centrality, the node color is determined by parties (blue for Democrats and red for Republicans), the edge size is determined by the number of mentions between two nodes. 
+We can learn that GovDunleavy， BrainKempGA and  KimReynoldsIA have mentioned Trump the most times on Twitter. In other words, the relationship strength between them is strong. Almost all governors mentioned Trump on Twitter are Republicans, which are in the same party with Trump. Compared with Biden, Trump is mentioned more by governors.
+
+GavinNewsom (governor from California) have mentioned Biden the most times on Twitter while BrainKempGA (governor from Georgia) and KimReynoldsIA (governor from Iowa) have mentioned Trump the most times on Twitter. From the graph "Weighted Covid cases & typical D/R state interactive plot" in Part 1, we can learn that the COVID-19 cases in Georgia and Iowa are higher than that in California. To some extent, our hypothesis and assumption are supported. However, it is necessary to carry out further research in the future to prove the hypothesis.
+
+
+
+

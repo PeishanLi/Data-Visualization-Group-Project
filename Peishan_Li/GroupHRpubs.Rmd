@@ -1,0 +1,484 @@
+---
+title: "Group H Group Project"
+author: "Peishan Li Shiying Lai Taoli Xiaofan Liu"
+date: "4/18/2021"
+output:
+  html_document:
+    code_folding: hide
+---
+<style>
+body{ /* Normal */
+font-size: 15px;
+color: black;
+}
+write {  
+line-height: 7em;
+}
+table { /* Table */
+font-size: 12px;
+}
+h1 { /* Header 1 */
+font-size: 30px;
+}
+h2 { /* Header 2 *
+font-size: 26px;
+}
+h3 { /* Header 3 */
+font-size: 22px;
+}
+code.r{ /* Code block */
+font-size: 14px;
+}
+pre { /* Code block */
+font-size: 14px
+}
+.main-container {
+    width: 80%;
+    max-width: unset;
+}
+</style>
+
+```{r setup, echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo=FALSE,eval=TRUE, message=FALSE, warning=FALSE)
+```
+
+```{r}
+#library(httr)
+#set_config(use_proxy(url="127.0.0.1",port=15364))
+```
+
+```{r, echo=FALSE, eval=TRUE}
+library(readxl)
+library(foreign)
+library(haven)
+library(magrittr)
+library(dplyr)
+library(ggplot2)    
+library(plotly)
+library(ggmap)
+library(ggthemes)
+library(ggpubr)
+library(tidyverse)
+library(rgdal)
+library(osmdata)
+library(nominatim)
+library(jsonlite)
+library(RColorBrewer)
+library(DT)
+library(tidyr)
+library(leaflet)
+library(formattable)
+library(tigris)
+library(htmlwidgets)
+library(sf)
+library(gganimate)
+library(webshot)
+library(maptools)
+library(rgeos)
+library(rgdal)
+library(kableExtra)
+```
+
+## Covid 19's Development vs Election {.tabset .tabset-fade}
+
+### The relationship of in-person voting VS mail-in voting and Covid-19 case development 
+
+#### The relationship of in-person voting VS mail-in voting and Covid-19 case development 
+We want to explore the relationship of in-person voting VS mail-in voting and Covid-19 case development.
+
+#### Part 1
+
+The overall pandemic situation before the voting period starts might lead to people's preference of mail-in voting. This could be somewhat proved by the fact that people absence of in-person voting could register for mail ballot and fill in "Covid" as the excuse.
+
+To understand this, we plot a trend of mail-in voting percentage in elections since 2000 to see if there is an evidence of increasing favoritism in mail-in voting versus other voting modes. 
+
+The background knowledge suggests that Trump administration and its supporters oppose mail-in voting, so we'll also be looking at the difference of mail-in voting preference change for Democrats and Republicans respectively.
+
+```{r overall mail percentage, echo=FALSE, eval=TRUE}
+overallmailpercentage<-data.frame(Year=c(2000, 2004, 2008, 2012, 2016, 2020), Percentage=c(percent(0.10), percent(0.13), percent(0.16), percent(0.19), percent(0.21), percent(0.46)))
+```
+
+#### Percentage of mail-in voting in each election
+
+```{r overall plot, echo=FALSE, eval=TRUE, fig.align="center"}
+overall<-overallmailpercentage %>%
+  ggplot(.,aes(x=Year,y=Percentage))+
+  theme_bw()+
+  geom_line(color="lightsteelblue2")+
+  geom_point(aes(size=Percentage), color="coral")+
+  labs(x="Year of Election", y="Percentage of Mail-in Voting", title="Percentage of Mail-in Voting in Each Election", caption="Source: SPAE")+
+  scale_size_continuous(guide=FALSE)+
+  scale_x_discrete(limits=c(2000, 2004, 2008, 2012, 2016, 2020))+
+  theme(plot.title=element_text(hjust = 0.5))
+overall
+```
+
+There is a sharp increase in general mail-in voting percentage from 2016 to 2020, which could well be due to the Covid-19 development.
+
+```{r 2020, echo=FALSE, eval=TRUE}
+vote2020<-read_sav("2020vote.sav")
+vote2020<-data.frame(vote2020)
+vote2020$mail<-ifelse(vote2020$Q4==3, 1, 0)
+analysis2020<-vote2020 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  filter(row_number()==1) %>%
+  select(pid3, mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3==1|pid3==2) %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2020$Year<-2020
+analysis2020$party[analysis2020$pid3==1]<-"Democrat"
+analysis2020$party[analysis2020$pid3==2]<-"Republican"
+analysis2020$partycolor[analysis2020$party=="Democrat"]<-"blue"
+analysis2020$partycolor[analysis2020$party=="Republican"]<-"red"
+analysis2020<-data.frame(analysis2020)
+analysis2020<-analysis2020 %>%
+  select(party, mail, partytotal, partyvotetype, percentpartyvotetype, Year, partycolor)
+```
+
+```{r 2016, echo=FALSE, eval=TRUE}
+vote2016<-read.dta("2016vote.dta")
+vote2016$mail<-ifelse(vote2016$Q4=="Voted by mail or absentee ballot my mail", 1, 0)
+analysis2016<-vote2016 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  ungroup() %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  group_by(pid3, mail) %>%
+  filter(row_number()==1) %>%
+  select(pid3,mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3=="Democrat"|pid3=="Republican") %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2016<-rename(analysis2016, c("party"="pid3"))
+analysis2016$Year<-2016
+for (i in 1:2){
+  if (analysis2016$party[i]=="Democrat"){
+    analysis2016$partycolor[i]<-"blue"
+  }else if (analysis2016$party[i]=="Republican"){
+    analysis2016$partycolor[i]<-"red"
+  }
+}
+```
+
+```{r 2012, echo=FALSE, eval=TRUE}
+vote2012<-read.dta("2012vote.dta")
+vote2012$mail<-ifelse(vote2012$q4=="Voted by mail (or absentee)", 1, 0)
+analysis2012<-vote2012 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  ungroup() %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  group_by(pid3, mail) %>%
+  filter(row_number()==1) %>%
+  select(pid3,mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3=="Democrat"|pid3=="Republican") %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2012<-rename(analysis2012, c("party"="pid3"))
+analysis2012$Year<-2012
+for (i in 1:2){
+  if (analysis2012$party[i]=="Democrat"){
+    analysis2012$partycolor[i]<-"blue"
+  }else if (analysis2012$party[i]=="Republican"){
+    analysis2012$partycolor[i]<-"red"
+  }
+}
+```
+
+```{r 2008, echo=FALSE, eval=TRUE}
+vote2008<-read.dta("2008vote.dta")
+vote2008$mail<-ifelse(vote2008$q5=="voted by mail (or absentee)", 1, 0)
+analysis2008<-vote2008 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  ungroup() %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  group_by(pid3, mail) %>%
+  filter(row_number()==1) %>%
+  select(pid3,mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3=="democrat "|pid3=="republican ") %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2008<-rename(analysis2008, c("party"="pid3"))
+analysis2008$Year<-2008
+analysis2008$party<-as.character(analysis2008$party)
+analysis2008$party[analysis2008$party=="democrat "]<-"Democrat"
+analysis2008$party[analysis2008$party=="republican "]<-"Republican"
+analysis2008$partycolor[analysis2008$party=="Democrat"]<-"blue"
+analysis2008$partycolor[analysis2008$party=="Republican"]<-"red"
+```
+
+```{r combine all years, echo=FALSE, eval=TRUE}
+analysisbyparty<-rbind(analysis2020, analysis2016, analysis2012, analysis2008)
+analysisbyparty<-rename(analysisbyparty, c("Percentage"="percentpartyvotetype"))
+```
+#### Percentage of mail-in voting by party
+
+```{r overall plot by party, echo=FALSE, eval=TRUE, fig.align="center"}
+byparty<-analysisbyparty %>%
+  ggplot(.,aes(x=Year,y=Percentage, group=party))+
+  theme_bw()+
+  geom_line(aes(color=party))+
+  geom_point(aes(color=party))+
+  scale_color_manual(values=c("Democrat"="blue", "Republican"="red"))+
+  theme(legend.position="right")+
+  annotate("text", x=2018, y=0.55, label="Democratic Party", color="blue")+
+  annotate("text", x=2019, y=0.35, label="Republican Party", color="red")+
+  labs(x="Year of Election", y="Percentage of Mail-in Voting", title="Percentage of Mail-in Voting by Party", caption="Source: SPAE")+
+  scale_size_continuous(guide=FALSE)+
+  scale_x_discrete(limits=c(2008, 2012, 2016, 2020))+
+  theme(plot.title=element_text(hjust = 0.5))
+byparty
+```
+
+There is also a sharp increase from 2016 to 2020 by party. Particularly, Democrats favor the idea of mail-in voting much more than Republicans.
+
+*Data Source: https://dataverse.harvard.edu/dataverse/SPAE*
+
+#### Part 2
+
+We’ll then explore if different voting mechanisms could have an impact on number of cases. How does the percentage of mail-in voting affect the increase of Covid-19 cases? Do democratic states and republican states differ in the increase of Covid-19 cases during the whole voting period, since they might have different policies and preferences regarding in-person vs mail-in voting at state government level?
+
+```{r, echo=FALSE, eval=TRUE}
+vote<-read.csv("weightedvote.csv")
+pid3<-read.csv("pid3.csv")
+```
+
+```{r vote and pid3 by state, echo=FALSE, eval=TRUE}
+bystate<-inner_join(vote, pid3, by='id')
+bystate<-rename(bystate, c("state"="id"))
+bystate<-rename(bystate, c("mail"="Voted.by.mail.or.absentee.ballot.by.mail..including.dropping.off.a.ballot.that.was.mailed.to.you."))
+bystate<-bystate %>%
+  select(state, mail, Democrat, Republican) %>%
+  mutate(DandR=Democrat+Republican) %>%
+  mutate(Democratpercent=percent(Democrat/DandR))%>%
+  mutate(Republicanpercent=percent(Republican/DandR))
+bystate$mail<-percent(bystate$mail/100)
+#Prepare color information for further plotting
+for (i in 1:51){
+  if (bystate$Democrat[i]<bystate$Republican[i]){
+    bystate$party[i]="red"
+  }else if (bystate$Democrat[i]>bystate$Republican[i]){
+    bystate$party[i]="blue"
+  }else if (bystate$Democrat[i]==bystate$Republican[i]){
+    bystate$party[i]="#b2aeae"
+  }
+}
+```
+
+```{r us states, echo=FALSE, eval=TRUE}
+us.states<-map_data("state")
+us.states<-as_data_frame(us.states)
+us.states<-rename(us.states, c("state"="region"))
+us.states$subregion<-NULL
+us.states$state<-str_to_title(us.states$state)
+#Add state abbreviations and centers
+statenames<-as_data_frame(cbind(state=state.name, state.abb=state.abb, 
+                                state.center.x=state.center$x, state.center.y=state.center$y))
+statenames<-statenames %>% 
+  mutate_each_(funs(as.numeric), vars=c("state.center.x","state.center.y"))
+us.states<-left_join(us.states, statenames)
+```
+
+```{r geoid, echo=FALSE, eval=TRUE}
+geoid<-read.csv("state_fips_master.csv")
+geoid<-rename(geoid, c("state.abb"="state_abbr"))
+geoid<-rename(geoid, c("GEOID"="fips"))
+geoid<-geoid %>%
+  select(state.abb, GEOID)
+#Convert GEOID into characters
+geoid$GEOID<-as.character(geoid$GEOID)
+#Certain fip-codes need to be pre-processed
+geoid$GEOID[geoid$state.abb=="AL"]<-"01"
+geoid$GEOID[geoid$state.abb=="AK"]<-"02"
+geoid$GEOID[geoid$state.abb=="AZ"]<-"04"
+geoid$GEOID[geoid$state.abb=="AR"]<-"05"
+geoid$GEOID[geoid$state.abb=="CA"]<-"06"
+geoid$GEOID[geoid$state.abb=="CO"]<-"08"
+geoid$GEOID[geoid$state.abb=="CT"]<-"09"
+#Add fip-codes for District of Columbia
+DC<-c("DC","11")
+geoid<-rbind(geoid,DC)
+```
+
+```{r combine with abbreviations, echo=FALSE, eval=TRUE}
+usfullabb<-us.states %>%
+  select(state, state.abb) %>%
+  group_by(state) %>%
+  filter(row_number()==1) %>%
+  ungroup()
+bystatejoin<-left_join(bystate, usfullabb, by="state")
+#A few states miss state abbreviations. Complete the list.
+bystatejoin$state.abb[bystatejoin$state=="Alaska"]="AK"
+bystatejoin$state.abb[bystatejoin$state=="District of Columbia"]="DC"
+bystatejoin$state.abb[bystatejoin$state=="Hawaii"]="HI"
+```
+
+```{r combine bystate with geoid, echo=FALSE, eval=TRUE}
+bystategeoid<-left_join(bystatejoin, geoid, by="state.abb")
+```
+
+```{r shapefiles, echo=FALSE, eval=TRUE,include=FALSE}
+stateshape<-states(cb=TRUE)
+```
+
+
+```{r covid data, echo=FALSE, eval=TRUE}
+covid<-read.csv("United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv")
+```
+
+```{r preprocessing, echo=FALSE, eval=TRUE}
+covid$submission_date<-as.Date(covid$submission_date, "%m/%d/%Y")
+#Filter data during the voting peiord
+covid<-covid %>%
+  arrange(submission_date) %>%
+  filter(submission_date>="2020-09-17" &submission_date<="2020-11-10")
+#General view
+covid<-covid %>%
+  group_by(submission_date, state) %>%
+  mutate(dailytotal=sum(tot_cases)) %>%
+  ungroup() %>%
+  group_by(state) %>%
+  mutate(statetotalduringvoting=sum(tot_cases)) %>%
+  ungroup() %>%
+  select(submission_date, state, tot_cases, dailytotal, statetotalduringvoting)
+covid<-rename(covid, "state.abb"="state")
+```
+
+```{r population, echo=FALSE, eval=TRUE}
+population<-read.csv("nst-est2020.csv")
+```
+
+```{r preprocess populations, echo=FALSE, eval=TRUE}
+population<-population %>%
+  select(NAME, POPESTIMATE2020) %>%
+  filter(NAME!="United States" & NAME!="Northeast Region" & NAME!="Midwest Region" & NAME!="South Region" & NAME!="West Region")
+population<-rename(population, c("state"="NAME"))
+population<-rename(population, c("popestimate"="POPESTIMATE2020"))
+```
+
+```{r combine covid and population dataset, echo=FALSE, eval=TRUE}
+population<-left_join(population, usfullabb, by="state")
+population$state.abb[population$state=="Alaska"]="AK"
+population$state.abb[population$state=="District of Columbia"]="DC"
+population$state.abb[population$state=="Hawaii"]="HI"
+covidw<-left_join(population, covid, by="state.abb")
+```
+
+```{r weighted data, echo=FALSE, eval=TRUE}
+covidw<-covidw %>%
+  arrange(submission_date) %>%
+  mutate(dailytotalw=round(dailytotal/popestimate*1000000)) %>%
+  mutate(statetotalw=round(statetotalduringvoting/popestimate*1000000))
+```
+
+```{r total number, echo=FALSE, eval=TRUE}
+totalcovid<-covidw %>%
+  group_by(state.abb) %>%
+  filter(row_number()==1) %>%
+  ungroup() %>%
+  select(state, popestimate, state.abb, statetotalduringvoting, statetotalw)
+totalcovid<-rename(totalcovid, c("STATE"="state"))
+```
+
+```{r all data, echo=FALSE, eval=TRUE}
+totalcovidgeoid<-left_join(totalcovid, geoid, by="state.abb")
+alldata<-left_join(totalcovidgeoid, bystategeoid, by="GEOID")
+alldata$state.abb.y<-NULL
+alldata$state<-NULL
+alldata<-rename(alldata, "state.abb"="state.abb.x")
+alldata$mail<-as.numeric(alldata$mail)
+```
+
+```{r merge state data with covid, echo=FALSE, eval=TRUE}
+allbystate=geo_join(stateshape, alldata, "STATEFP", "GEOID")
+```
+
+#### Mail-in voting percentage & typical D/R state interactive plot
+
+In the leaflet map, polygons are used to reflect the percentage of mail-in voting. Each state is categorized as a typical Democratic state or a Republican state based on the percentage of Democrats and Republicans from the 2020 SPAE, which is represented by the color of the state's border on the map. 
+
+*Data Source: Stewart, Charles, 2021, "2020 Survey of the Performance of American Elections", https://doi.org/10.7910/DVN/FSGX7Z, Harvard Dataverse, V1, UNF:6:70KW4uouuTDT860MiPJq3A== [fileUNF]*
+```{r 1st map, echo=FALSE, eval=TRUE, fig.width=9, fig.height=7}
+content<-paste("State:", allbystate$STATE, "<br/>",
+               "Total number of cases:", allbystate$statetotalduringvoting, "<br/>",
+               "Weighted total number of cases:", allbystate$statetotalw, "<br/>",
+              "Percentage of mail-in voting:", allbystate$mail, "<br/>",
+              "Percentage of Democrats in All Democrats and Republicans:", allbystate$Democratpercent, "<br/>",
+              "Percentage of Republicans in All Democrats and Republicans:", allbystate$Republicanpercent, "<br/>")
+pal=colorNumeric(palette="Greens", domain=allbystate$mail) 
+leafletmap1<-leaflet() %>%
+  addTiles() %>%
+  addProviderTiles("Stamen.TonerLite") %>%
+  setView(-98.1156, 38.4204, zoom=4) %>%
+  addPolygons(group="Mail-in Voting Percentage", data=allbystate, fillColor=~pal(allbystate$mail), color=allbystate$party, fillOpacity=0.7, weight=2, smoothFactor=0.2, popup=content, label=~stringr::str_c(NAME, 'See pop-up for more info'), labelOptions=labelOptions(direction='auto'), highlightOptions=highlightOptions(color=allbystate$party, weight=5, bringToFront=TRUE, sendToBack=TRUE)) %>%
+  addLegend("bottomright", pal=pal, values=allbystate$mail, title="State Mail-in Voting Percentage", opacity=1)
+leafletmap1
+```
+
+#### Weighted Covid cases & typical D/R state interactive plot
+
+In the leaflet map, polygons are used to reflect the percentage of Covid cases increase in the voting period till 7 days after election day. We have only kept data during the voting period. The election day is November 3, and the earliest voting time is 46 days before the election day. Reference from *[Early Voting Calendar](https://www.vote.org/early-voting-calendar/)*. The end of our observation date is 7 days after the election day. Each state is categorized as a typical Democratic state or a Republican state based on the percentage of Democrats and Republicans from the 2020 SPAE, which is represented by the color of the state's border on the map. 
+
+*Data Source for Covid cases: [United States CDC](https://data.cdc.gov/Case-Surveillance/United-States-COVID-19-Cases-and-Deaths-by-State-o/9mfq-cb36)*
+
+*Data Source for population: [United States Census Bureau](https://www.census.gov/programs-surveys/popest/technical-documentation/research/evaluation-estimates.html)*
+```{r 2nd map, echo=FALSE, eval=TRUE, fig.width=9, fig.height=7}
+content<-paste("State:", allbystate$STATE, "<br/>",
+               "Total number of cases:", allbystate$statetotalduringvoting, "<br/>",
+               "Weighted total number of cases:", allbystate$statetotalw, "<br/>",
+              "Percentage of mail-in voting:", allbystate$mail, "<br/>",
+              "Percentage of Democrats in All Democrats and Republicans:", allbystate$Democratpercent, "<br/>",
+              "Percentage of Republicans in All Democrats and Republicans:", allbystate$Republicanpercent, "<br/>")
+pal=colorNumeric(palette="Oranges", domain=allbystate$statetotalw) 
+leafletmap2_peishan<-leaflet() %>%
+  addTiles() %>%
+  addProviderTiles("Stamen.TonerLite") %>%
+  setView(-98.1156, 38.4204, zoom=4) %>%
+  addPolygons(data=allbystate, fillColor=~pal(allbystate$statetotalw), color=allbystate$party, fillOpacity=0.7, weight=2, smoothFactor=0.2, popup=content, label=~stringr::str_c(NAME, ' See pop-up for more info'), labelOptions=labelOptions(direction='auto'), highlightOptions=highlightOptions(color=allbystate$party, weight=5, bringToFront=TRUE, sendToBack=TRUE)) %>%
+  addLegend("bottomright", pal=pal, values=allbystate$statetotalw, title="State Weighted Covid Cases Increase During Voting Period", opacity=1)
+leafletmap2_peishan
+```
+
+Run a regression to see the relationship between mail-in voting percentage and weighted covid cases and visualize the relationship.
+
+```{r regression, echo=FALSE, eval=TRUE}
+lm<-lm(log(statetotalw)~mail, data=alldata)
+print("Regression Result:")
+summary(lm)
+```
+
+The result suggests that on average, 1 percent increase in mail-in voting proportion is associated with a 69.4 percent decrease of weighted covid cases in a state, not taking into other factors into account, and the influence is significant.
+
+```{r plot relationship, echo=FALSE, eval=TRUE, fig.align="center"}
+alldata$partyname[alldata$party=="blue"]<-"Democrat"
+alldata$partyname[alldata$party=="red"]<-"Republican"
+relationship<-ggplot(alldata, aes(x=mail, y=log(statetotalw), group=partyname))+
+  theme_bw()+
+  geom_point(aes(color=partyname))+
+  geom_smooth(aes(color=partyname),method="lm", formula=y~x, se=FALSE)+
+  scale_color_manual(values=c("Democrat"="blue", "Republican"="red"))+
+  theme(legend.position="right")+
+  labs(x="Percentage of mail-in voting", y="Total covid cases in a state (taken logarithm)", title="Relationship between mail-in voting and covid cases increase")+
+  theme(plot.title=element_text(hjust=0.5))
+relationship
+```

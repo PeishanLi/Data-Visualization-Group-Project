@@ -1,0 +1,1530 @@
+---
+title: "Group H Group Project"
+author: "Li Peishan Shiying Lai Taoli Xiaofan Liu"
+date: "4/18/2021"
+output:
+  html_document:
+    code_folding: hide
+---
+<style>
+body{ /* Normal */
+font-size: 15px;
+color: black;
+}
+write {  
+line-height: 7em;
+}
+table { /* Table */
+font-size: 12px;
+}
+h1 { /* Header 1 */
+font-size: 30px;
+}
+h2 { /* Header 2 *
+font-size: 26px;
+}
+h3 { /* Header 3 */
+font-size: 22px;
+}
+code.r{ /* Code block */
+font-size: 14px;
+}
+pre { /* Code block */
+font-size: 14px
+}
+.main-container {
+    width: 80%;
+    max-width: unset;
+}
+</style>
+
+```{r setup, echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo=FALSE,eval=TRUE, message=FALSE, warning=FALSE)
+```
+
+```{r}
+#library(httr)
+#set_config(use_proxy(url="127.0.0.1",port=15364))
+```
+
+```{r, echo=FALSE, eval=TRUE}
+library(readxl)
+library(foreign)
+library(haven)
+library(magrittr)
+library(dplyr)
+library(ggplot2)    
+library(plotly)
+library(ggmap)
+library(ggthemes)
+library(ggpubr)
+library(tidyverse)
+library(rgdal)
+library(osmdata)
+library(nominatim)
+library(jsonlite)
+library(RColorBrewer)
+library(DT)
+library(tidyr)
+library(leaflet)
+library(formattable)
+library(tigris)
+library(htmlwidgets)
+library(sf)
+library(gganimate)
+library(webshot)
+library(maptools)
+library(rgeos)
+library(rgdal)
+library(kableExtra)
+```
+
+## Covid 19's Development vs Election {.tabset .tabset-fade}
+
+### The relationship of in-person voting VS mail-in voting and Covid-19 case development 
+
+#### The relationship of in-person voting VS mail-in voting and Covid-19 case development 
+We want to explore the relationship of in-person voting VS mail-in voting and Covid-19 case development.
+
+#### Part 1
+
+The overall pandemic situation before the voting period starts might lead to people's preference of mail-in voting. This could be somewhat proved by the fact that people absence of in-person voting could register for mail ballot and fill in "Covid" as the excuse.
+
+To understand this, we plot a trend of mail-in voting percentage in elections since 2000 to see if there is an evidence of increasing favoritism in mail-in voting versus other voting modes. 
+
+The background knowledge suggests that Trump administration and its supporters oppose mail-in voting, so we'll also be looking at the difference of mail-in voting preference change for Democrats and Republicans respectively.
+
+```{r overall mail percentage, echo=FALSE, eval=TRUE}
+overallmailpercentage<-data.frame(Year=c(2000, 2004, 2008, 2012, 2016, 2020), Percentage=c(percent(0.10), percent(0.13), percent(0.16), percent(0.19), percent(0.21), percent(0.46)))
+```
+
+#### Percentage of mail-in voting in each election
+
+```{r overall plot, echo=FALSE, eval=TRUE, fig.align="center"}
+overall<-overallmailpercentage %>%
+  ggplot(.,aes(x=Year,y=Percentage))+
+  theme_bw()+
+  geom_line(color="lightsteelblue2")+
+  geom_point(aes(size=Percentage), color="coral")+
+  labs(x="Year of Election", y="Percentage of Mail-in Voting", title="Percentage of Mail-in Voting in Each Election", caption="Source: SPAE")+
+  scale_size_continuous(guide=FALSE)+
+  scale_x_discrete(limits=c(2000, 2004, 2008, 2012, 2016, 2020))+
+  theme(plot.title=element_text(hjust = 0.5))
+overall
+```
+
+There is a sharp increase in general mail-in voting percentage from 2016 to 2020, which could well be due to the Covid-19 development.
+
+```{r 2020, echo=FALSE, eval=TRUE}
+vote2020<-read_sav("2020vote.sav")
+vote2020<-data.frame(vote2020)
+vote2020$mail<-ifelse(vote2020$Q4==3, 1, 0)
+analysis2020<-vote2020 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  filter(row_number()==1) %>%
+  select(pid3, mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3==1|pid3==2) %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2020$Year<-2020
+analysis2020$party[analysis2020$pid3==1]<-"Democrat"
+analysis2020$party[analysis2020$pid3==2]<-"Republican"
+analysis2020$partycolor[analysis2020$party=="Democrat"]<-"blue"
+analysis2020$partycolor[analysis2020$party=="Republican"]<-"red"
+analysis2020<-data.frame(analysis2020)
+analysis2020<-analysis2020 %>%
+  select(party, mail, partytotal, partyvotetype, percentpartyvotetype, Year, partycolor)
+```
+
+```{r 2016, echo=FALSE, eval=TRUE}
+vote2016<-read.dta("2016vote.dta")
+vote2016$mail<-ifelse(vote2016$Q4=="Voted by mail or absentee ballot my mail", 1, 0)
+analysis2016<-vote2016 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  ungroup() %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  group_by(pid3, mail) %>%
+  filter(row_number()==1) %>%
+  select(pid3,mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3=="Democrat"|pid3=="Republican") %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2016<-rename(analysis2016, c("party"="pid3"))
+analysis2016$Year<-2016
+for (i in 1:2){
+  if (analysis2016$party[i]=="Democrat"){
+    analysis2016$partycolor[i]<-"blue"
+  }else if (analysis2016$party[i]=="Republican"){
+    analysis2016$partycolor[i]<-"red"
+  }
+}
+```
+
+```{r 2012, echo=FALSE, eval=TRUE}
+vote2012<-read.dta("2012vote.dta")
+vote2012$mail<-ifelse(vote2012$q4=="Voted by mail (or absentee)", 1, 0)
+analysis2012<-vote2012 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  ungroup() %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  group_by(pid3, mail) %>%
+  filter(row_number()==1) %>%
+  select(pid3,mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3=="Democrat"|pid3=="Republican") %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2012<-rename(analysis2012, c("party"="pid3"))
+analysis2012$Year<-2012
+for (i in 1:2){
+  if (analysis2012$party[i]=="Democrat"){
+    analysis2012$partycolor[i]<-"blue"
+  }else if (analysis2012$party[i]=="Republican"){
+    analysis2012$partycolor[i]<-"red"
+  }
+}
+```
+
+```{r 2008, echo=FALSE, eval=TRUE}
+vote2008<-read.dta("2008vote.dta")
+vote2008$mail<-ifelse(vote2008$q5=="voted by mail (or absentee)", 1, 0)
+analysis2008<-vote2008 %>%
+  select(mail, pid3) %>%
+  group_by(pid3) %>%
+  mutate(partytotal=n()) %>%
+  ungroup() %>%
+  group_by(pid3, mail) %>%
+  mutate(partyvotetype=n()) %>%
+  ungroup() %>%
+  mutate(percentpartyvotetype=percent(partyvotetype/partytotal)) %>%
+  group_by(pid3, mail) %>%
+  filter(row_number()==1) %>%
+  select(pid3,mail, partytotal, partyvotetype, percentpartyvotetype) %>%
+  filter(pid3=="democrat "|pid3=="republican ") %>%
+  filter(mail==1) %>%
+  arrange(pid3)
+analysis2008<-rename(analysis2008, c("party"="pid3"))
+analysis2008$Year<-2008
+analysis2008$party<-as.character(analysis2008$party)
+analysis2008$party[analysis2008$party=="democrat "]<-"Democrat"
+analysis2008$party[analysis2008$party=="republican "]<-"Republican"
+analysis2008$partycolor[analysis2008$party=="Democrat"]<-"blue"
+analysis2008$partycolor[analysis2008$party=="Republican"]<-"red"
+```
+
+```{r combine all years, echo=FALSE, eval=TRUE}
+analysisbyparty<-rbind(analysis2020, analysis2016, analysis2012, analysis2008)
+analysisbyparty<-rename(analysisbyparty, c("Percentage"="percentpartyvotetype"))
+```
+#### Percentage of mail-in voting by party
+
+```{r overall plot by party, echo=FALSE, eval=TRUE, fig.align="center"}
+byparty<-analysisbyparty %>%
+  ggplot(.,aes(x=Year,y=Percentage, group=party))+
+  theme_bw()+
+  geom_line(aes(color=party))+
+  geom_point(aes(color=party))+
+  scale_color_manual(values=c("Democrat"="blue", "Republican"="red"))+
+  theme(legend.position="right")+
+  #annotate("text", x=2018, y=0.55, label="Democratic Party", color="blue")+
+  #annotate("text", x=2019, y=0.35, label="Republican Party", color="red")+
+  labs(x="Year of Election", y="Percentage of Mail-in Voting", title="Percentage of Mail-in Voting by Party", caption="Source: SPAE")+
+  scale_size_continuous(guide=FALSE)+
+  scale_x_discrete(limits=c(2008, 2012, 2016, 2020))+
+  theme(plot.title=element_text(hjust = 0.5))
+byparty
+```
+
+There is also a sharp increase from 2016 to 2020 by party. Particularly, Democrats favor the idea of mail-in voting much more than Republicans.
+
+*Data Source: https://dataverse.harvard.edu/dataverse/SPAE*
+
+#### Part 2
+
+We’ll then explore if different voting mechanisms could have an impact on number of cases. How does the percentage of mail-in voting affects the increase of Covid-19 cases? Do democratic states and republican states differ in the increase of Covid-19 cases during the whole voting period, since they might have different policies and preferences regarding in-person vs mail-in voting at state government level?
+
+```{r, echo=FALSE, eval=TRUE}
+vote<-read.csv("weightedvote.csv")
+pid3<-read.csv("pid3.csv")
+```
+
+```{r vote and pid3 by state, echo=FALSE, eval=TRUE}
+bystate<-inner_join(vote, pid3, by='id')
+bystate<-rename(bystate, c("state"="id"))
+bystate<-rename(bystate, c("mail"="Voted.by.mail.or.absentee.ballot.by.mail..including.dropping.off.a.ballot.that.was.mailed.to.you."))
+bystate<-bystate %>%
+  select(state, mail, Democrat, Republican) %>%
+  mutate(DandR=Democrat+Republican) %>%
+  mutate(Democratpercent=percent(Democrat/DandR))%>%
+  mutate(Republicanpercent=percent(Republican/DandR))
+bystate$mail<-percent(bystate$mail/100)
+#Prepare color information for further plotting
+for (i in 1:51){
+  if (bystate$Democrat[i]<bystate$Republican[i]){
+    bystate$party[i]="red"
+  }else if (bystate$Democrat[i]>bystate$Republican[i]){
+    bystate$party[i]="blue"
+  }else if (bystate$Democrat[i]==bystate$Republican[i]){
+    bystate$party[i]="#b2aeae"
+  }
+}
+```
+
+```{r us states, echo=FALSE, eval=TRUE}
+us.states<-map_data("state")
+us.states<-as_data_frame(us.states)
+us.states<-rename(us.states, c("state"="region"))
+us.states$subregion<-NULL
+us.states$state<-str_to_title(us.states$state)
+#Add state abbreviations and centers
+statenames<-as_data_frame(cbind(state=state.name, state.abb=state.abb, 
+                                state.center.x=state.center$x, state.center.y=state.center$y))
+statenames<-statenames %>% 
+  mutate_each_(funs(as.numeric), vars=c("state.center.x","state.center.y"))
+us.states<-left_join(us.states, statenames)
+```
+
+```{r geoid, echo=FALSE, eval=TRUE}
+geoid<-read.csv("state_fips_master.csv")
+geoid<-rename(geoid, c("state.abb"="state_abbr"))
+geoid<-rename(geoid, c("GEOID"="fips"))
+geoid<-geoid %>%
+  select(state.abb, GEOID)
+#Convert GEOID into characters
+geoid$GEOID<-as.character(geoid$GEOID)
+#Certain fip-codes need to be pre-processed
+geoid$GEOID[geoid$state.abb=="AL"]<-"01"
+geoid$GEOID[geoid$state.abb=="AK"]<-"02"
+geoid$GEOID[geoid$state.abb=="AZ"]<-"04"
+geoid$GEOID[geoid$state.abb=="AR"]<-"05"
+geoid$GEOID[geoid$state.abb=="CA"]<-"06"
+geoid$GEOID[geoid$state.abb=="CO"]<-"08"
+geoid$GEOID[geoid$state.abb=="CT"]<-"09"
+#Add fip-codes for District of Columbia
+DC<-c("DC","11")
+geoid<-rbind(geoid,DC)
+```
+
+```{r combine with abbreviations, echo=FALSE, eval=TRUE}
+usfullabb<-us.states %>%
+  select(state, state.abb) %>%
+  group_by(state) %>%
+  filter(row_number()==1) %>%
+  ungroup()
+bystatejoin<-left_join(bystate, usfullabb, by="state")
+#A few states miss state abbreviations. Complete the list.
+bystatejoin$state.abb[bystatejoin$state=="Alaska"]="AK"
+bystatejoin$state.abb[bystatejoin$state=="District of Columbia"]="DC"
+bystatejoin$state.abb[bystatejoin$state=="Hawaii"]="HI"
+```
+
+```{r combine bystate with geoid, echo=FALSE, eval=TRUE}
+bystategeoid<-left_join(bystatejoin, geoid, by="state.abb")
+```
+
+```{r shapefiles, echo=FALSE, eval=TRUE,include=FALSE}
+stateshape<-states(cb=TRUE)
+```
+
+```{r covid data, echo=FALSE, eval=TRUE}
+covid<-read.csv("United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv")
+```
+
+```{r preprocessing, echo=FALSE, eval=TRUE}
+covid$submission_date<-as.Date(covid$submission_date, "%m/%d/%Y")
+#Filter data during the voting peiord
+covid<-covid %>%
+  arrange(submission_date) %>%
+  filter(submission_date>="2020-09-17" &submission_date<="2020-11-10")
+#General view
+covid<-covid %>%
+  group_by(submission_date, state) %>%
+  mutate(dailytotal=sum(tot_cases)) %>%
+  ungroup() %>%
+  group_by(state) %>%
+  mutate(statetotalduringvoting=sum(tot_cases)) %>%
+  ungroup() %>%
+  select(submission_date, state, tot_cases, dailytotal, statetotalduringvoting)
+covid<-rename(covid, "state.abb"="state")
+```
+
+```{r population, echo=FALSE, eval=TRUE}
+population<-read.csv("nst-est2020.csv")
+```
+
+```{r preprocess populations, echo=FALSE, eval=TRUE}
+population<-population %>%
+  select(NAME, POPESTIMATE2020) %>%
+  filter(NAME!="United States" & NAME!="Northeast Region" & NAME!="Midwest Region" & NAME!="South Region" & NAME!="West Region")
+population<-rename(population, c("state"="NAME"))
+population<-rename(population, c("popestimate"="POPESTIMATE2020"))
+```
+
+```{r combine covid and population dataset, echo=FALSE, eval=TRUE}
+population<-left_join(population, usfullabb, by="state")
+population$state.abb[population$state=="Alaska"]="AK"
+population$state.abb[population$state=="District of Columbia"]="DC"
+population$state.abb[population$state=="Hawaii"]="HI"
+covidw<-left_join(population, covid, by="state.abb")
+```
+
+```{r weighted data, echo=FALSE, eval=TRUE}
+covidw<-covidw %>%
+  arrange(submission_date) %>%
+  mutate(dailytotalw=round(dailytotal/popestimate*1000000)) %>%
+  mutate(statetotalw=round(statetotalduringvoting/popestimate*1000000))
+```
+
+```{r total number, echo=FALSE, eval=TRUE}
+totalcovid<-covidw %>%
+  group_by(state.abb) %>%
+  filter(row_number()==1) %>%
+  ungroup() %>%
+  select(state, popestimate, state.abb, statetotalduringvoting, statetotalw)
+totalcovid<-rename(totalcovid, c("STATE"="state"))
+```
+
+```{r all data, echo=FALSE, eval=TRUE}
+totalcovidgeoid<-left_join(totalcovid, geoid, by="state.abb")
+alldata<-left_join(totalcovidgeoid, bystategeoid, by="GEOID")
+alldata$state.abb.y<-NULL
+alldata$state<-NULL
+alldata<-rename(alldata, "state.abb"="state.abb.x")
+alldata$mail<-as.numeric(alldata$mail)
+```
+
+```{r merge state data with covid, echo=FALSE, eval=TRUE}
+allbystate=geo_join(stateshape, alldata, "STATEFP", "GEOID")
+```
+
+#### Mail-in voting percentage & typical D/R state interactive plot
+
+In the leaflet map, polygons are used to reflect the percentage of mail-in voting. Each state is categorized as a typical Democratic state or a Republican state based on the percentage of Democrats and Republicans from the 2020 SPAE, which is represented by the color of the state's border on the map. 
+
+*Data Source: Stewart, Charles, 2021, "2020 Survey of the Performance of American Elections", https://doi.org/10.7910/DVN/FSGX7Z, Harvard Dataverse, V1, UNF:6:70KW4uouuTDT860MiPJq3A== [fileUNF]*
+```{r 1st map, echo=FALSE, eval=TRUE, fig.width=9, fig.height=7}
+content<-paste("State:", allbystate$STATE, "<br/>",
+               "Total number of cases:", allbystate$statetotalduringvoting, "<br/>",
+               "Weighted total number of cases:", allbystate$statetotalw, "<br/>",
+              "Percentage of mail-in voting:", allbystate$mail, "<br/>",
+              "Percentage of Democrats in All Democrats and Republicans:", allbystate$Democratpercent, "<br/>",
+              "Percentage of Republicans in All Democrats and Republicans:", allbystate$Republicanpercent, "<br/>")
+pal=colorNumeric(palette="Greens", domain=allbystate$mail) 
+leafletmap1<-leaflet() %>%
+  addTiles() %>%
+  addProviderTiles("Stamen.TonerLite") %>%
+  setView(-98.1156, 38.4204, zoom=4) %>%
+  addPolygons(group="Mail-in Voting Percentage", data=allbystate, fillColor=~pal(allbystate$mail), color=allbystate$party, fillOpacity=0.7, weight=2, smoothFactor=0.2, popup=content, label=~stringr::str_c(NAME, 'See pop-up for more info'), labelOptions=labelOptions(direction='auto'), highlightOptions=highlightOptions(color=allbystate$party, weight=5, bringToFront=TRUE, sendToBack=TRUE)) %>%
+  addLegend("bottomright", pal=pal, values=allbystate$mail, title="State Mail-in Voting Percentage", opacity=1)
+leafletmap1
+```
+
+#### Weighted Covid cases & typical D/R state interactive plot
+
+In the leaflet map, polygons are used to reflect the percentage of Covid cases increase in the voting period till 7 days after election day. We have only kept data during the voting period. The election day is November 3, and the earliest voting time is 46 days before the election day. Reference from *[Early Voting Calendar](https://www.vote.org/early-voting-calendar/)*. The end of our observation date is 7 days after the election day. Each state is categorized as a typical Democratic state or a Republican state based on the percentage of Democrats and Republicans from the 2020 SPAE, which is represented by the color of the state's border on the map. 
+
+*Data Source for Covid cases: [United States CDC](https://data.cdc.gov/Case-Surveillance/United-States-COVID-19-Cases-and-Deaths-by-State-o/9mfq-cb36)*
+
+*Data Source for population: [United States Census Bureau](https://www.census.gov/programs-surveys/popest/technical-documentation/research/evaluation-estimates.html)*
+```{r 2nd map, echo=FALSE, eval=TRUE, fig.width=9, fig.height=7}
+content<-paste("State:", allbystate$STATE, "<br/>",
+               "Total number of cases:", allbystate$statetotalduringvoting, "<br/>",
+               "Weighted total number of cases:", allbystate$statetotalw, "<br/>",
+              "Percentage of mail-in voting:", allbystate$mail, "<br/>",
+              "Percentage of Democrats in All Democrats and Republicans:", allbystate$Democratpercent, "<br/>",
+              "Percentage of Republicans in All Democrats and Republicans:", allbystate$Republicanpercent, "<br/>")
+pal=colorNumeric(palette="Oranges", domain=allbystate$statetotalw) 
+leafletmap2_peishan<-leaflet() %>%
+  addTiles() %>%
+  addProviderTiles("Stamen.TonerLite") %>%
+  setView(-98.1156, 38.4204, zoom=4) %>%
+  addPolygons(data=allbystate, fillColor=~pal(allbystate$statetotalw), color=allbystate$party, fillOpacity=0.7, weight=2, smoothFactor=0.2, popup=content, label=~stringr::str_c(NAME, ' See pop-up for more info'), labelOptions=labelOptions(direction='auto'), highlightOptions=highlightOptions(color=allbystate$party, weight=5, bringToFront=TRUE, sendToBack=TRUE)) %>%
+  addLegend("bottomright", pal=pal, values=allbystate$statetotalw, title="State Weighted Covid Cases Increase During Voting Period", opacity=1)
+leafletmap2_peishan
+```
+
+Run a regression to see the relationship between mail-in voting percentage and weighted covid cases and visualize the relationship.
+
+```{r regression, echo=FALSE, eval=TRUE}
+lm<-lm(log(statetotalw)~mail, data=alldata)
+print("Regression Result:")
+summary(lm)
+```
+
+The result suggests that on average, 1 percent increase in mail-in voting proportion is associated with a 69.4 percent decrease of weighted covid cases in a state, not taking into other factors into account, and the influence is significant.
+
+```{r plot relationship, echo=FALSE, eval=TRUE, fig.align="center"}
+alldata$partyname[alldata$party=="blue"]<-"Democrat"
+alldata$partyname[alldata$party=="red"]<-"Republican"
+relationship<-ggplot(alldata, aes(x=mail, y=log(statetotalw), group=partyname))+
+  theme_bw()+
+  geom_point(aes(color=partyname))+
+  geom_smooth(aes(color=partyname),method="lm", formula=y~x, se=FALSE)+
+  scale_color_manual(values=c("Democrat"="blue", "Republican"="red"))+
+  theme(legend.position="right")+
+  labs(x="Percentage of mail-in voting", y="Total covid cases in a state (taken logarithm)", title="Relationship between mail-in voting and covid cases increase")+
+  theme(plot.title=element_text(hjust=0.5))
+relationship
+```
+
+### Do  Large Gathering Events Increase Covid 19 Cases? 
+
+```{r}
+#library(httr)
+#set_config(use_proxy(url="127.0.0.1",port=8668))
+library(dplyr)
+library(ggplot2)
+library(tidyverse) 
+library(ggthemes)
+library(reshape2)
+library(lubridate) 
+library(knitr) 
+library("readxl")
+library(kableExtra)
+#install.packages("showtext")
+library(showtext)
+font_add("Arial", "/Library/Fonts/Arial.ttf")  # Use the actual file path
+showtext_auto()
+library(xaringanthemer)
+style_mono_accent(
+  base_color = "#FF7F50",               # bright red
+  inverse_background_color = "#002B36", # dark dark blue
+  inverse_header_color = "#31b09e",     # light aqua green
+  inverse_text_color = "#FFFFFF",       # white
+  title_slide_background_color = "var(--base)",
+  text_font_google = google_font("Kelly Slab"),
+  header_font_google = google_font("Oleo Script")
+)
+options("scipen"=100, "digits"=4)
+```
+
+
+```{r}
+#How I get covid_us_county_level dataset
+#dataFiles <- lapply(Sys.glob("*.csv"), read.csv)
+#covid_global<-bind_rows(dataFiles, .id = "column_label")
+#covid_us_county_level<-covid_global %>% filter(Country_Region=="US")
+#write.csv(x=covid_us_county_level, file="covid_us_county_level")
+```
+
+```{r}
+covid_us_county_level<-read.csv("covid_us_county_level")
+trump_2020_rallies<-read.csv("trump 2020 presidential election rallies.csv")
+```
+
+#### PART 1 
+
+<br>
+
+#### We prepare a dataset containing 21  Trump's Election Rallies' information for 2020.
+
+You could see there are time, location, participatents and whether the activities is indoor or outdoor information in this dataset.
+
+<br>
+
+```{r,width=10}
+trump_2020_rallies_intro<-trump_2020_rallies %>% select(Date,City,County,State,Indoors.,People.Counting)
+kable(trump_2020_rallies_intro, format = "html") %>%kable_styling(bootstrap_options = c("striped"),full_width = T,font_size = 15) %>%scroll_box(height = "300px")
+```
+
+<br>
+
+#### We also use the Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE to get the county level daily confirmed cases data. 
+
+<br>
+
+#### We create 22 Covid 19 daily confirmed cases trend plot for these 21 rallies using these two dataset to see if large gathering event could speed up the spread of Covid 19.
+
+We carefully choose two month period(one month before the rally and one month after the rally to study possible Covid 19 spread speed change.) 
+However, the JHU's Covid daily report only update twice a week, and both updates are adjacent. Thus, you could see there are points concentrating on certain dates. Therefore we use a week as a comparison unit(the line lays between four points is a week period).
+
+<br>
+
+#### Methodology for Comparsion 
+we compare the slope of the week when a rally take place with the slope one week before the rally to see if the rally make a change to the Covid 19 spread speed.(if rally is on the JHU update dates(the points), we will compare the slope after the points and before the points)
+
+
+
+
+```{r,width=10}
+Tulsa<-covid_us_county_level %>% filter(Admin2=="Tulsa")
+Maricopa<-covid_us_county_level %>% filter(Admin2=="Maricopa")
+Blue_Earth<-covid_us_county_level %>% filter(Admin2=="Blue Earth")
+Winnebago<-covid_us_county_level %>% filter(Admin2=="Winnebago") %>% filter(Province_State=="Wisconsin")
+Yuma<-covid_us_county_level %>% filter(Admin2=="Yuma") %>% filter(Province_State=="Arizona")
+Lackawanna<-covid_us_county_level %>% filter(Admin2=="Lackawanna")
+Rockingham<-covid_us_county_level %>% filter(Admin2=="Rockingham") %>% filter(Province_State=="New Hampshire")
+Westmoreland<-covid_us_county_level %>% filter(Admin2=="Westmoreland") %>% filter(Province_State=="Pennsylvania")
+Forsyth<-covid_us_county_level %>% filter(Admin2=="Forsyth") %>% filter(Province_State=="North Carolina")
+Saginaw<-covid_us_county_level %>% filter(Admin2=="Saginaw")
+Clark<-covid_us_county_level %>% filter(Admin2=="Clark")%>% filter(Province_State=="Nevada")
+Douglas<-covid_us_county_level %>% filter(Admin2=="Douglas")%>% filter(Province_State=="Nevada")
+Marathon<-covid_us_county_level %>% filter(Admin2=="Marathon")
+Beltrami<-covid_us_county_level %>% filter(Admin2=="Beltrami")
+Cumberland<-covid_us_county_level %>% filter(Admin2=="Cumberland") %>% filter(Province_State=="North Carolina")
+Lucas<-covid_us_county_level %>% filter(Admin2=="Lucas") %>% filter(Province_State=="Ohio")
+Vandalia <-covid_us_county_level %>% filter(Admin2=="Vandalia")
+Allegheny<-covid_us_county_level %>% filter(Admin2=="Allegheny")
+Duval<-covid_us_county_level %>% filter(Admin2=="Duval") %>% filter(Province_State=="Florida")
+Newport_News<-covid_us_county_level %>% filter(Admin2=="Newport News")
+Dauphin<-covid_us_county_level %>% filter(Admin2=="Dauphin")
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+#### PART 2 - 1
+
+<br>
+
+#### There are three comparsion result, we prepare one typical example for each result to illustrate our methodology.
+
+<br>
+<br>
+<br>
+<br>
+
+#### Example -- Spread Speed Increases
+
+```{r,width=10}
+Marathon_date<-Marathon%>% separate(Last_Update,c("date","time"),sep=" ")
+Marathon_date$date<-as.Date(parse_date_time(Marathon_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Marathon_date_narrow<-Marathon_date %>% filter(date>=as.Date("2020-08-17") & date<=as.Date("2020-10-17"))
+ggplot(Marathon_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+ylim(c(0,3000))+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-17","2020-10-17")))+labs(title="Covid Daily Comfirmed Cases for Marathon(Mosinee), Wisconsin",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-17"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-17, the slope of line between 2020-09-12 to 2020-09-19 is steeper than 2020-09-06 to 2020-09-13. This might implies  the Covid 19's spread in Marathon(Mosinee), Wisconsin speed up after the rally. 
+
+
+<br>
+<br>
+
+
+#### Example -- Spread Speed No Change
+
+```{r,width=10}
+Blue_Earth_date<-Blue_Earth %>% separate(Last_Update,c("date","time"),sep=" ")
+Blue_Earth_date$date<-as.Date(parse_date_time(Blue_Earth_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Blue_Earth_date_narrow<-Blue_Earth_date %>% filter(date>=as.Date("2020-07-17") & date<=as.Date("2020-09-17"))
+ggplot(Blue_Earth_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", limits = as.Date(c("2020-07-17","2020-09-17")))+ylim(c(500,2000))+labs(title="Covid Daily Comfirmed Cases for Blue Earth(Mankato), Minnesota",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-08-17"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+From the above graph, we could see after the rally event at 2020-08-17, the slope of line between 2020-08-13 to 2020-08-20's slope is very similar with before. This might implies the election rally has no obvious effect on Blue Earth(Mankato), Minnesota.
+
+<br>
+<br>
+
+#### Example -- Spread Speed Slows Down
+
+```{r,width=10}
+Saginaw_date<-Forsyth%>% separate(Last_Update,c("date","time"),sep=" ")
+Saginaw_date$date<-as.Date(parse_date_time(Saginaw_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Saginaw_date_narrow<-Saginaw_date %>% filter(date>=as.Date("2020-08-10") & date<=as.Date("2020-10-10"))
+ggplot(Saginaw_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-08-10","2020-10-10")))+ylim(c(5000,7500))+labs(title="Covid Daily Comfirmed Cases for Saginaw(Freeland), Michigan",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-10"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-10, the slope of line between 2020-09-06 to 2020-09-13 is flatter than before. This might implies the Covid 19's spread slows down after the rally in Saginaw(Freeland), Michigan.
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+#### PART 2 - 2
+
+<br>
+
+#### Trend plots of the rest of 21 rallies. 
+
+```{r,width=10}
+Winnebago_date<-Winnebago %>% separate(Last_Update,c("date","time"),sep=" ")
+Winnebago_date$date<-as.Date(parse_date_time(Winnebago_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Winnebago_date_narrow<-Winnebago_date %>% filter(date>=as.Date("2020-07-17") & date<=as.Date("2020-09-17"))
+ggplot(Winnebago_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", limits = as.Date(c("2020-07-17","2020-09-17")))+ylim(c(500,2000))+labs(title="Covid Daily Comfirmed Cases for Winnebago(Oshkosh),Wisconsin",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-08-17"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-08-17, the slope of line between 2020-08-13 to 2020-08-20 is flatter than before. This might implies the Covid 19's spread slows down after the rally in Winnebago(Oshkosh),Wisconsin. 
+
+
+
+
+
+
+```{r,width=10}
+Tulsa_date<-Tulsa %>% separate(Last_Update,c("date","time"),sep=" ")
+Tulsa_date$date<-as.Date(parse_date_time(Tulsa_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Tulsa_date_narrow<-Tulsa_date %>% filter(date>=as.Date("2020-04-20") & date<=as.Date("2020-07-20"))
+ggplot(Tulsa_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow =arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", limits = as.Date(c("2020-05-20","2020-07-17")))+scale_y_continuous(breaks =seq(0,12000,1000))+labs(title="Covid Daily Comfirmed Cases for Tulsa, Oklahoma",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-06-20"), linetype = "dashed",size=0.3,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-06-10, the slope of line between 2020-06-20 to2020-06-27 is much steeper than before. This might implies the election rally speed up the Covid 19's spread in Tulsa, Oklahoma. 
+
+
+
+
+
+
+```{r,width=10}
+Maricopa_date<-Maricopa %>% separate(Last_Update,c("date","time"),sep=" ")
+Maricopa_date$date<-as.Date(parse_date_time(Maricopa_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Maricopa_date_narrow<-Maricopa_date %>% filter(date>=as.Date("2020-05-23") & date<=as.Date("2020-07-23"))
+ggplot(Maricopa_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-05-23","2020-07-23")))+scale_y_continuous(breaks =seq(0,100000,20000))+labs(title="Covid Daily Comfirmed Cases for Maricopa(Phoenix), Arizona",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-06-23"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+From the above graph, we could see after the rally event at 2020-06-23, the slope of line between 2020-06-20 to 2020-06-27 is steeper than before. This might implies the election rally speed up the Covid 19's spread in Maricopa(Phoenix), Arizona.However, the effect is not very obvious.
+
+
+
+
+
+
+
+```{r,width=10}
+Yuma_date<-Yuma%>% separate(Last_Update,c("date","time"),sep=" ")
+Yuma_date$date<-as.Date(parse_date_time(Yuma_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Yuma_date_narrow<-Yuma_date %>% filter(date>=as.Date("2020-07-18") & date<=as.Date("2020-09-18"))
+ggplot(Yuma_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-07-18","2020-09-18")))+ylim(c(8000,14000))+labs(title="Covid Daily Comfirmed Cases for Yuma, Arizona",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-08-18"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+From the above graph, we could see after the rally event at 2020-08-18, the slope of line between 2020-08-13 to 2020-08-20 is slightly steeper than before. This might implies  the Covid 19's spread in Tulsa, Oklahoma slightly speed up after the rally. 
+
+
+
+
+
+
+```{r,width=10}
+Lackawanna_date<-Lackawanna%>% separate(Last_Update,c("date","time"),sep=" ")
+Lackawanna_date$date<-as.Date(parse_date_time(Lackawanna_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Lackawanna_date_narrow<-Lackawanna_date %>% filter(date>=as.Date("2020-07-20") & date<=as.Date("2020-09-20"))
+ggplot(Lackawanna_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-07-20","2020-09-20")))+ylim(c(1500,2500))+labs(title="Covid Daily Comfirmed Cases for Lackawanna(Old Forge), Pennsylvania",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-08-20"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+From the above graph, we could see after the rally event at 2020-08-20, the slope of line between 2020-08-19 to 2020-08-26 is steeper than 2020-08-13 to 2020-08-20. This might implies the Covid 19's spread in Lackawanna(Old Forge), Pennsylvania speed up after the election rally.
+
+
+
+
+
+
+```{r,width=10}
+Rockingham_date<-Rockingham%>% separate(Last_Update,c("date","time"),sep=" ")
+Rockingham_date$date<-as.Date(parse_date_time(Rockingham_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Rockingham_date_narrow<-Rockingham_date %>% filter(date>=as.Date("2020-07-28") & date<=as.Date("2020-09-28"))
+ggplot(Rockingham_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-07-28","2020-09-28")))+ylim(c(1600,2050))+labs(title="Covid Daily Comfirmed Cases for Rockingham(Londonberry),New Hampshire",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-08-28"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-08-28, the slope of line between 2020-08-25 to 2020-09-01 is almost the same as before. This might implies the Covid 19's spread in Rockingham(Londonberry),New Hampshire slightly has no obvious change after the election rally.
+
+
+
+
+
+
+```{r,width=10}
+Westmoreland_date<-Westmoreland%>% separate(Last_Update,c("date","time"),sep=" ")
+Westmoreland_date$date<-as.Date(parse_date_time(Westmoreland_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Westmoreland_date_narrow<-Westmoreland_date %>% filter(date>=as.Date("2020-08-03") & date<=as.Date("2020-10-03"))
+ggplot(Westmoreland_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-08-03","2020-10-03")))+ylim(c(1400,2400))+labs(title="Covid Daily Comfirmed Cases for Westmoreland(Latrobe),Pennsylvania ",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-08"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-06-10,the slope of line between 2020-09-06 to 2020-09-13 is almost the same as 2020-08-25 to 2020-09-01. This might implies the Covid 19's spread in Westmoreland(Latrobe),Pennsylvania  has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Forsyth_date<-Forsyth%>% separate(Last_Update,c("date","time"),sep=" ")
+Forsyth_date$date<-as.Date(parse_date_time(Forsyth_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Forsyth_date_narrow<-Forsyth_date %>% filter(date>=as.Date("2020-08-08") & date<=as.Date("2020-10-08"))
+ggplot(Forsyth_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-08-08","2020-10-08")))+ylim(c(5000,8000))+labs(title="Covid Daily Comfirmed Cases for Forsyth(Winston-Salem), North Carolina",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-08"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-08, the slope of line between 2020-08-13 to 2020-08-20 is flatter than before. This might implies the Covid 19's spread slows down after the rally in Forsyth(Winston-Salem), North Carolina.
+
+
+
+
+
+```{r,width=10}
+Douglas_date<-Douglas%>% separate(Last_Update,c("date","time"),sep=" ")
+Douglas_date$date<-as.Date(parse_date_time(Douglas_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Douglas_date_narrow<-Douglas_date %>% filter(date>=as.Date("2020-08-12") & date<=as.Date("2020-10-12"))
+ggplot(Douglas_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+ylim(c(200,350))+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-08-12","2020-10-12")))+labs(title="Covid Daily Comfirmed Cases for Douglas(Minden), Nevada",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-12"), linetype = "dashed",size=0.5                                              ,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-12, the slope of line between 2020-09-12 to 2020-09-19 is steeper than 2020-09-06 to 2020-09-13. This might implies  the Covid 19's spread in Douglas(Minden), Nevada speed up after the rally. 
+
+
+
+
+
+
+```{r,width=10}
+Clark_date<-Clark%>% separate(Last_Update,c("date","time"),sep=" ")
+Clark_date$date<-as.Date(parse_date_time(Clark_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Clark_date_narrow<-Clark_date %>% filter(date>=as.Date("2020-08-13") & date<=as.Date("2020-10-13"))
+ggplot(Clark_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+ylim(c(50000,74000))+scale_x_date(date_breaks = "10 day", 
+                 limits = as.Date(c("2020-08-13","2020-10-10")))+labs(title="Covid Daily Comfirmed Cases for Clark(Henderson), Nevada",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-13"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-13, the slope of line between 2020-09-12 to 2020-09-19 is almost the same as 2020-09-06 to 2020-09-13. This might implies the Covid 19's spread in Clark(Henderson), Nevada has no obvious change after the election rally.
+
+
+
+
+
+
+
+```{r,width=10}
+Beltrami_date<-Beltrami%>% separate(Last_Update,c("date","time"),sep=" ")
+Beltrami_date$date<-as.Date(parse_date_time(Beltrami_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Beltrami_date_narrow<-Beltrami_date %>% filter(date>=as.Date("2020-08-18") & date<=as.Date("2020-10-18"))
+ggplot(Beltrami_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-18","2020-10-18")))+ylim(c(250,750))+labs(title="Covid Daily Comfirmed Cases for Beltrami(Bemidji), Minnesota",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-18"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-18, the slope of line between 2020-09-18 to 2020-09-25 is almost the same as 2020-09-12 to 2020-09-19 This might implies the Covid 19's spread in Beltrami(Bemidji), Minnesota has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Cumberland_date<-Cumberland%>% separate(Last_Update,c("date","time"),sep=" ")
+Cumberland_date$date<-as.Date(parse_date_time(Cumberland_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Cumberland_date_narrow<-Cumberland_date %>% filter(date>=as.Date("2020-08-19") & date<=as.Date("2020-10-19"))
+ggplot(Cumberland_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-19","2020-10-15")))+ylim(c(3000,7000))+labs(title="Covid Daily Comfirmed Cases for Cumberland(Fayetteville), North Carolina",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-19"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 9/19/20, the slope of line between 2020-09-18 to 2020-09-25 is almost the same as 2020-09-12 to 2020-09-19 This might implies the Covid 19's spread in Cumberland(Fayetteville), North Carolina has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Lucas_date<-Lucas%>% separate(Last_Update,c("date","time"),sep=" ")
+Lucas_date$date<-as.Date(parse_date_time(Lucas_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Lucas_date_narrow<-Lucas_date %>% filter(date>=as.Date("2020-08-21") & date<=as.Date("2020-10-21"))
+ggplot(Lucas_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-21","2020-10-15")))+ylim(c(6000,8500))+labs(title="Covid Daily Comfirmed Cases for Lucas(Swanton),Ohio",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-21"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-21,the slope of line between 2020-09-18 to 2020-09-25 is almost the same as 2020-09-12 to 2020-09-19 This might implies the Covid 19's spread in Lucas(Swanton),Ohio has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Vandalia_date<-Lucas%>% separate(Last_Update,c("date","time"),sep=" ")
+Vandalia_date$date<-as.Date(parse_date_time(Vandalia_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Vandalia_date_narrow<-Vandalia_date %>% filter(date>=as.Date("2020-08-21") & date<=as.Date("2020-10-21"))
+ggplot(Vandalia_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-21","2020-10-15")))+ylim(c(6000,8000))+labs(title="Covid Daily Comfirmed Cases for Vandalia, Ohio",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-21"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-21,the slope of line between 2020-09-18 to 2020-09-25 is almost the same as 2020-09-12 to 2020-09-19 This might implies the Covid 19's spread in Vandalia, Ohio has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Allegheny_date<-Allegheny%>% separate(Last_Update,c("date","time"),sep=" ")
+Allegheny_date$date<-as.Date(parse_date_time(Allegheny_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Allegheny_date_narrow<-Allegheny_date %>% filter(date>=as.Date("2020-08-22") & date<=as.Date("2020-10-22"))
+ggplot(Allegheny_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-22","2020-10-22")))+ylim(c(10000,15000))+labs(title="Covid Daily Comfirmed Cases for Allegheny(Pittsburgh), Pennsylvania",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-22"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-22,the slope of line between 2020-09-18 to 2020-09-25 is almost the same as 2020-09-12 to 2020-09-19 This might implies the Covid 19's spread in Allegheny(Pittsburgh), Pennsylvania has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Duval_date<-Duval%>% separate(Last_Update,c("date","time"),sep=" ")
+Duval_date$date<-as.Date(parse_date_time(Duval_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Duval_date_narrow<-Duval_date %>% filter(date>=as.Date("2020-08-24") & date<=as.Date("2020-10-24"))
+ggplot(Duval_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-24","2020-10-24")))+ylim(c(25000,35000))+labs(title="Covid Daily Comfirmed Cases for Duval(Jacksonville), Florida",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-24"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-24,the slope of line between 2020-09-24 to 2020-10-01 is almost the same as 2020-09-18 to 2020-09-25. This might implies the Covid 19's spread in Duval(Jacksonville), Florida has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Newport_News_date<-Newport_News%>% separate(Last_Update,c("date","time"),sep=" ")
+Newport_News_date$date<-as.Date(parse_date_time(Newport_News_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Newport_News_date_narrow<-Newport_News_date %>% filter(date>=as.Date("2020-08-25") & date<=as.Date("2020-10-25"))
+ggplot(Newport_News_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-25","2020-10-25")))+ylim(c(2000,3500))+labs(title="Covid Daily Comfirmed Cases for Newport News, Virginia",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-25"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-25,the slope of line between 2020-09-24 to 2020-10-01 is almost the same as 2020-09-18 to 2020-09-25. This might implies the Covid 19's spread in Newport News, Virginia has no obvious change after the election rally.
+
+
+
+
+
+```{r,width=10}
+Dauphin_date<-Dauphin%>% separate(Last_Update,c("date","time"),sep=" ")
+Dauphin_date$date<-as.Date(parse_date_time(Dauphin_date$date, orders = c("%m/%d/%y","%y-%m-%d")))
+Dauphin_date_narrow<-Dauphin_date %>% filter(date>=as.Date("2020-08-26") & date<=as.Date("2020-10-26"))
+ggplot(Dauphin_date_narrow,aes(x=date,y=Confirmed))+geom_line(col="lightsteelblue2",size =1.5,arrow = arrow())+geom_point(color="steelblue")+ylim(c(3000,4500))+scale_x_date(date_breaks = "7 day", 
+                 limits = as.Date(c("2020-08-26","2020-10-22")))+labs(title="Covid Daily Comfirmed Cases for Dauphin(Middletown), Pennsylvania",caption= "Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE",y="Confirmed Covid Cases Per Day")+geom_vline(xintercept = as.Date("2020-09-26"), linetype = "dashed",size=0.5,col="coral")+theme_xaringan()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=8,angle=-45, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank()
+        )
+```
+
+
+From the above graph, we could see after the rally event at 2020-09-26,the slope of line between 2020-09-24 to 2020-10-01 is almost the same as 2020-09-18 to 2020-09-25. This might implies the Covid 19's spread in Dauphin(Middletown), Pennsylvania has no obvious change after the election rally.
+
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+#### Part 3 
+
+<br>
+
+#### Using the same methodology introduced before, we prepare a Covid 19 Spread Speed Change Summary table to show all the comparision results.
+
+<br>
+
+#### Covid 19 Spread Speed Change Summary table
+
+```{r,width=10}
+trump_2020_rallies_summary<-trump_2020_rallies %>%select(Date,City,State,Indoors.,Covid.Spread.After.Rally)
+kable(trump_2020_rallies_summary,format = "html")%>%kable_styling(bootstrap_options = c("striped"),full_width = T,font_size = 15) %>%scroll_box(height = "300px") 
+```
+
+
+From the above table we Could see, among all the rallies, only 38.1%(8/21) cities might have increased Covid 19 spread speed. Thus, it is hard to conclude that rallies have negative effect on Covid 19 spread.
+
+
+
+<br>
+<br>
+<br>
+<br>
+
+
+
+#### Part 4 
+
+<br>
+
+####Does Indoor or Outdoor matter? 
+
+<br>
+<br>
+
+```{r,fig.width=10}
+ggplot(trump_2020_rallies,aes(x=Indoors.,fill=Covid.Spread.After.Rally))+geom_bar(position="fill",width=0.5)+scale_x_discrete(labels=c("Outdoor Rallies", "Indoor Rallies"))+labs(title = "The composition of Covid Spread Speed Change after Trump's Indoor and Outdoor Election Rallies", caption = ,y="Percentage")+scale_fill_manual(values=c("lightsteelblue","lightyellow","coral"),label=c("No Change","Slow down","Speed Up"))+guides(fill=guide_legend(title="Covid 19 spread Speed Change after Rally"))+theme_pander()+theme(axis.text.y = element_text (face="bold",size=10),plot.title = element_text(size = 12, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10, face="bold"),
+        axis.title.x = element_blank(),
+                                    legend.position="top"
+                                  )
+```
+
+
+From the above graph we could see after all indoors' rally, the Covid 19's spread speed increase. However, the among the outdoor rallies, the situation is much better that more than 75% of cities' Covid 19 spread speed remain the same or even slow down. 
+
+
+### The Relationship between Governors' tweets and COVID-19 Cases by State 
+
+<br>
+<br>
+
+#### The Relationship between Governors' tweets and COVID-19 Cases by State 
+
+We want to explore the sentiment of governors' tweets about COVID-19 and Election in 2020. We also comapared the sentiment score and COVID-19 cases by state to see whether there's correlation between them.
+<br>
+<br>
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(rtweet)
+library(leaflet)
+library(tigris)
+library(plotly)
+library(readxl)
+library(ggthemes)
+library(leaflet)
+library(wordcloud)
+
+```
+
+
+```{r}
+governor_tweets <- readRDS("governor_tweets.RDS")
+governor <- read_csv("governors_twitter1.csv")%>%
+ select(state, governor, party, twitter_handle, state_abbr)
+```
+
+```{r}
+d <- filter(governor_tweets, grepl("COVID19|corona|virus|SocialDistancing|distancing|mask|ballot|elect|vote", text))
+tweets <- d %>%
+        filter(is_retweet==FALSE) %>%
+        select(text,screen_name,hashtags,retweet_count)%>%
+        left_join(governor, by=c("screen_name"="twitter_handle"))
+```
+
+#### PART 1: Sentiment of Governors' Tweets about COVID and Election
+
+In the first part, we cleaned governors' tweets and did a bunch of visualizations to get an overview of the tweets.
+```{r}
+#### word cloud and sentiment
+library(tm)
+corpus0 <-VCorpus(VectorSource(tweets$text))
+# remove fully capitalized words 
+corpus1 = tm_map(corpus0, content_transformer(function(x) gsub("\\b[A-Z]+\\b","",x))) 
+corpus1 = tm_map(corpus0, content_transformer(function(x) gsub("[^[:alnum:][:space:]]","",x))) 
+# create a function to space and remove URLs
+removeURL <- content_transformer(function(x) gsub("(f|ht)tp(s?)://\\S+", "", x, perl=T))
+corpus1 = tm_map(corpus1, removeURL)
+# clean text
+clean_corpus <- function(corpus){
+  corpus <- tm_map(corpus, removePunctuation)
+  # corpus <- tm_map(corpus, content_transformer(removeNumPunct)) # from qdap
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  #corpus <- tm_map(corpus, content_transformer(replace_symbol)) # from qdap
+  corpus <- tm_map(corpus, removeWords, c(stopwords("en")))
+    # We could add more stop words as above
+  corpus <- tm_map(corpus, removeNumbers)
+  corpus <- tm_map(corpus, stripWhitespace)
+  return(corpus)
+}
+
+clean_corpus<-clean_corpus(corpus1)
+  
+
+library("SnowballC")
+corpus1_dtm <- DocumentTermMatrix(clean_corpus)
+corpus1_dtm <- as.matrix(corpus1_dtm)
+```
+
+```{r}
+adt = as.data.frame(corpus1_dtm)
+all = colSums(adt)
+all = data.frame('all'=all)
+all$labels = rownames(all)
+all = all[order(all[,1],decreasing = TRUE),]
+top20all = all[1:20,]
+top20all$labels = factor(top20all$labels, levels = top20all$labels)
+```
+
+#### Plot Most Frequent 20 Words
+```{r,fig.width=10}
+g_top20 <- ggplot(top20all,aes(x = labels, y = all)) + 
+  geom_bar(stat = 'identity',fill="coral")+ylim(c(0,4000))+
+  coord_flip() +
+  labs(title="Top 20 Words in US Governors' Covid 19 and Election Related Tweets",
+    x='Words',y = 'Frequency',caption= "Source:Twitter"
+    )+theme_pander()+
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
+        axis.text.x = element_text(size=12, hjust=0.1,vjust=1), 
+        axis.text.y = element_text(size=10, face="bold"), 
+        axis.title.y = element_text(size=10,face="bold"),
+        axis.title.x = element_blank(),
+        plot.caption = element_text(size=11, face="bold"),
+        panel.grid.major.x = element_blank())
+g_top20 
+```
+From the barplot above, we can see the top 20 words in governors' tweets. We can see that words like Covid, mask, vaccine and virus get the most frequencies. We can also see that words like test, vote, work and spread are pretty frequent as well.
+
+#### Plot positive & negative word clouds by party
+```{r}
+pos <- read.table("positive-words.txt", as.is=T)
+neg <- read.table("negative-words.txt", as.is=T)
+vector = c()
+sentiment <- function(words){
+  require(quanteda)
+  tok <- quanteda::tokens(words)
+  pos.count <- sum(tok[[1]]%in%pos[,1])
+  #cat("\n positive words:",tok[[1]][which(tok[[1]]%in%pos[,1])],"\n")
+  neg.count <- sum(tok[[1]]%in%neg[,1])
+  #cat("\n negative words:",tok[[1]][which(tok[[1]]%in%neg[,1])],"\n")
+  out <- (pos.count - neg.count)/(pos.count+neg.count)
+  #cat("\n Tone of Document:",out)
+  out
+}
+for (i in 1:7267){
+  vector[i] <- sentiment(tweets$text[i])
+}
+tweets["Tone_of_Text"] = vector
+
+
+
+```
+
+```{r}
+#plot positive vs negative words by party
+#split tweets by party
+d_tweets <- tweets%>%
+    filter(grepl( "D", party))
+
+r_tweets <- tweets%>%
+    filter(grepl( "R", party))
+  
+```
+
+#### Plot Democratic Positive & Negative Words
+```{r,message=FALSE,warning=FALSE,fig.height=10}
+# filter positive texts and negative texts
+d_pos_texts <- d_tweets %>%
+  filter(Tone_of_Text > 0) %>%
+  select(text)
+d_neg_texts <- d_tweets %>%
+  filter(Tone_of_Text < 0) %>%
+  select(text)
+com_texts <- c(d_pos_texts,d_neg_texts)
+com_corpus <-VCorpus(VectorSource(com_texts))
+com_corpus = tm_map(com_corpus, content_transformer(function(x) gsub("\\b[A-Z]+\\b","",x))) 
+com_corpus = tm_map(com_corpus, content_transformer(function(x) gsub("[^[:alnum:][:space:]]","",x))) 
+com_corpus = tm_map(com_corpus, content_transformer(tolower))  
+com_corpus = tm_map(com_corpus, removeNumbers)
+com_corpus = tm_map(com_corpus, removePunctuation)
+com_corpus = tm_map(com_corpus, removeWords, c(stopwords("en")))
+com_corpus = tm_map(com_corpus, stripWhitespace)
+#create document-term-matrix 
+com_dtm <- DocumentTermMatrix(com_corpus)
+com_dtm_ma <- as.matrix(com_dtm)
+com_tdm <- TermDocumentMatrix(com_corpus)
+com_ma <- as.matrix(com_tdm)
+colnames(com_ma) <- c("positive words","negative words")
+comparison.cloud(com_ma, colors = c("steelblue","lightsteelblue2"), title.size= 2,
+                 scale = c(6,2), max.words = 100, shape = "circle")
+```
+
+
+From the comparison wordcloud above, we can see the negative word cloud is dominated by words like virus, spread, cases, lost, etc. And positive word cloud's got words like protect, mask, test, vaccine, etc.
+
+#### Plot Republican Positive & Negative Words
+```{r,message=FALSE,warning=FALSE,fig.height=10}
+# filter positive texts and negative texts
+r_pos_texts <- r_tweets %>%
+  filter(Tone_of_Text > 0) %>%
+  select(text)
+r_neg_texts <- r_tweets %>%
+  filter(Tone_of_Text < 0) %>%
+  select(text)
+com_texts <- c(r_pos_texts,r_neg_texts)
+com_corpus <-VCorpus(VectorSource(com_texts))
+com_corpus = tm_map(com_corpus, content_transformer(function(x) gsub("\\b[A-Z]+\\b","",x)))
+com_corpus = tm_map(com_corpus, content_transformer(function(x) gsub("[^[:alnum:][:space:]]","",x))) 
+com_corpus = tm_map(com_corpus, content_transformer(tolower))  
+com_corpus = tm_map(com_corpus, removeNumbers)
+com_corpus = tm_map(com_corpus, removePunctuation)
+com_corpus = tm_map(com_corpus, removeWords, c(stopwords("en")))
+com_corpus = tm_map(com_corpus, stripWhitespace)
+#create document-term-matrix 
+com_dtm <- DocumentTermMatrix(com_corpus)
+com_dtm_ma <- as.matrix(com_dtm)
+com_tdm <- TermDocumentMatrix(com_corpus)
+com_ma <- as.matrix(com_tdm)
+colnames(com_ma) <- c("positive words","negative words")
+comparison.cloud(com_ma, colors = c("coral","lightpink"), title.size= 2,
+                 scale = c(6,2), max.words = 100, shape = "circle")
+```
+
+
+The Republican comparison word cloud is pretty much the same as Democratic word cloud, which is dominated by words like virus, outbreak, etc. 
+
+#### PART 2: Average Sentiment Scores of Governors' Tweets and COVID Cases
+Relationship between Average Sentiment Score of Governors' tweets about COVID19 and Confirmed COVID Cases by State
+```{r,include=FALSE}
+#preprocessiong and creating geo object
+geoid<-read.csv("state_fips_master.csv")
+geoid<-rename(geoid, c("state.abb"="state_abbr"))
+geoid<-rename(geoid, c("GEOID"="fips"))
+geoid<-geoid %>%
+  select(state.abb, GEOID)
+#Convert GEOID into characters
+geoid$GEOID<-as.character(geoid$GEOID)
+#Certain fip-codes need to be pre-processed
+geoid$GEOID[geoid$state.abb=="AL"]<-"01"
+geoid$GEOID[geoid$state.abb=="AK"]<-"02"
+geoid$GEOID[geoid$state.abb=="AZ"]<-"04"
+geoid$GEOID[geoid$state.abb=="AR"]<-"05"
+geoid$GEOID[geoid$state.abb=="CA"]<-"06"
+geoid$GEOID[geoid$state.abb=="CO"]<-"08"
+geoid$GEOID[geoid$state.abb=="CT"]<-"09"
+#Add fip-codes for District of Columbia
+DC<-c("DC","11")
+geoid<-rbind(geoid,DC)
+
+library(tigris)
+#options(tigris_use_cache = TRUE)
+
+stateshape<-states(cb=TRUE)
+
+covid_tweets <- filter(tweets, grepl("COVID19|corona|virus|SocialDistancing|distancing|mask", text))
+governor_sentiment <- aggregate(covid_tweets[, 9], list(covid_tweets$screen_name), na.rm = TRUE, mean)%>%
+        left_join(governor, by=c("Group.1"="twitter_handle"))%>%
+        rename(twitter_handle=Group.1)
+governor_sentiment <- governor_sentiment %>%
+        rename(avg_senti=Tone_of_Text)
+total_covid <- read_excel("total_covid.xlsx")
+alldata <- left_join(governor_sentiment, geoid, by=c("state_abbr"="state.abb"))
+#appending covid case data
+alldata <- left_join(alldata, total_covid, by="GEOID")
+allbystate=geo_join(stateshape, alldata, "STATEFP", "GEOID")
+```
+
+#### Plot Average Sentiment Score of each Governor by State
+```{r,fig.height=7,fig.width=9}
+#putting average sentiment to leaflet map
+content<-paste("State:", allbystate$state, "<br/>",
+              "Avg sentiment score of governor tweets about COVID:", allbystate$avg_senti, "<br/>",                "Total number of cases:", allbystate$total_cases, "<br/>",
+              "Governor party:", allbystate$party, "<br/>")
+pal=colorNumeric(palette="Oranges", allbystate$avg_senti) 
+leafletmap2<-leaflet() %>%
+  addTiles() %>%
+  addProviderTiles("Stamen.TonerLite") %>%
+  setView(-98.1156, 38.4204, zoom=4) %>%
+  addPolygons(data=allbystate, fillColor=~pal(allbystate$avg_senti), color=allbystate$party, fillOpacity=0.7, weight=2, smoothFactor=0.2, popup=content, label=~stringr::str_c(state, ' See pop-up for more info'), labelOptions=labelOptions(direction='auto'), highlightOptions=highlightOptions(color=allbystate$party, weight=5, bringToFront=TRUE, sendToBack=TRUE)) %>%
+  addLegend("bottomright", pal=pal, values=allbystate$avg_senti, title="Average sentiment score", opacity=1)
+leafletmap2
+```
+
+From the leaflet map above, we can see that states like Arizona, Idaho, West Virginia, and Texas have relatively positive sentiment scores. On the other hand, states like New Mexico, South Carolina, Washington and New York have relatively negative sentiment scores.
+
+#### Compare the Average Sentiment Leaflet Map Above to Covid Cases Leaflet Map
+
+```{r, echo=FALSE, eval=TRUE, fig.width=9, fig.height=7}
+leafletmap2_peishan
+```
+
+Comparing the two leaflet maps above, we can't see obvious correlation between sentiment score and Covid cases.
+
+
+### US State Governors' Relationship with Biden/Trump Affect VS Covid 19's Development
+
+
+#### US State Governors' Relationship with Biden/Trump Affect VS Covid 19's Development
+```{r import data, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+library("knitr")
+knitr::opts_chunk$set(echo = TRUE, eval=TRUE, message=FALSE, warning = FALSE)
+d=read.csv("governors_twitter.csv") #choose the "governors_twitter" file
+governor_tweets <- readRDS("governor_tweets.RDS") #choose the "governor_tweets" file
+library(igraph)
+library(ggraph)
+library(network)
+library(ggnetwork)
+library(statnet)
+library(ggplot2)
+library(dplyr)
+library(tidyverse) 
+
+```
+Network Analysis of governors from each state who mention Biden/Trump on Twitter
+
+We would also like to investigate the relationship between governors and Biden/Trump. We collected around 1,000 tweets from Twitter from 2020.6 to now and focus on governors from each state who mention Biden/Trump on their Twitter accounts.
+
+The hypothesis is that governors from the same party with Biden/Trump will mention him more than governors from the opposite party. We also make a further assumption that states that governors mention Trump more will have higher number of COVID-19 cases than states that governors mention Biden more.
+
+#### 1. The network of governors who mention Biden on Twitter
+```{r,fig.height=20,fig.width=20}
+#Biden
+mention.Biden <- unnest(governor_tweets, mentions_screen_name)%>% filter(mentions_screen_name == "JoeBiden")
+mention_Biden <- subset(mention.Biden, select=c(screen_name, mentions_screen_name))
+d.Biden <- mention_Biden %>% left_join(., d, by=c('screen_name'='twitter_handle'))
+
+g1 <- graph_from_data_frame(d.Biden , directed = TRUE)
+
+weight<-table(d.Biden$mentions_screen_name)
+degree=igraph::degree(g1, mode = 'all')
+
+plot(g1, 
+     edge.color = "grey",
+     edge.size = sqrt(weight+1),
+     vertex.color = ifelse( d.Biden$party == "D" , 
+                     "blue", "red"),
+     vertex.size = sqrt(degree+1),
+     edge.arrow.size = 0.05, 
+     vertex.label.cex = 2,
+     vertex.label.color = "black",
+     layout = layout_nicely(g1),
+     main = "The network of governors who mention Biden on Twitter")
+
+```
+
+In the graph above, the node size is determined by degree centrality, the node color is determined by parties (blue for Democrats and red for Republicans), the edge size is determined by the number of mentions between two nodes. 
+We can learn that GovPritzker and GavinNewsom have mentioned Biden the most times on Twitter. In other words, the relationship strength between them is strong. Most governors mentioned Biden on Twitter are Democrats, which are in the same party with Biden. 
+
+#### 2. The network of governors who mention Trump
+```{r,fig.height=20,fig.width=20}
+#Trump
+mention.Trump <- unnest(governor_tweets, mentions_screen_name)%>% filter(mentions_screen_name == "realDonaldTrump")
+
+mention_Trump <- subset(mention.Trump, select=c(screen_name, mentions_screen_name))
+d.Trump <- mention_Trump %>% left_join(., d, by=c('screen_name'='twitter_handle'))
+g2 <- graph_from_data_frame(d.Trump , directed = TRUE)
+
+weight<-table(d.Trump$mentions_screen_name)
+degree=igraph::degree(g2, mode = 'all')
+
+plot(g2, 
+     edge.color = "grey",
+     edge.size = sqrt(weight+1),
+     vertex.color = ifelse( d.Trump$party == "D" , 
+                     "blue", "red"),
+     vertex.size = sqrt(degree+1), 
+     edge.arrow.size = 0.05, 
+     vertex.label.cex = 2,
+     vertex.label.color = "black",
+     layout = layout_nicely(g2),
+     main = "The network of governors who mention Trump on Twitter")
+     
+```
+
+In the graph above, the node size is determined by degree centrality, the node color is determined by parties (blue for Democrats and red for Republicans), the edge size is determined by the number of mentions between two nodes. 
+We can learn that GovDunleavy， BrainKempGA and  KimReynoldsIA have mentioned Trump the most times on Twitter. In other words, the relationship strength between them is strong. Almost all governors mentioned Trump on Twitter are Republicans, which are in the same party with Trump. Compared with Biden, Trump is mentioned more by governors.
+
+GavinNewsom (governor from California) have mentioned Biden the most times on Twitter while BrainKempGA (governor from Georgia) and KimReynoldsIA (governor from Iowa) have mentioned Trump the most times on Twitter. From the graph "Weighted Covid cases & typical D/R state interactive plot", we can learn that the COVID-19 cases in Georgia and Iowa are higher than that in California. To some extent, our hypothesis and assumption are supported. However, it is necessary to carry out further research in the future to prove the hypothesis.
+
+## {-}
+
+
