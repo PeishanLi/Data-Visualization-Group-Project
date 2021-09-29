@@ -98,7 +98,7 @@ SAPE of each election Stewart, Charles, 2021, “2020 Survey of the Performance 
 
 [Covid cases by state by day--United States COVID-19 Cases and Deaths by State over Time](https://data.cdc.gov/Case-Surveillance/United-States-COVID-19-Cases-and-Deaths-by-State-o/9mfq-cb36)
 
-Covid cases at county level by day-Source: Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE
+[Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE](https://github.com/CSSEGISandData/COVID-19)
 
 [Population estimate 2020](https://www.census.gov/programs-surveys/popest/technical-documentation/research/evaluation-estimates.html)
 
