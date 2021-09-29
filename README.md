@@ -106,7 +106,7 @@ Twitter handles of the current governors from each state in the US (obtained fro
 
 Self collected data from news
 
-## Catalogue:
+## Directory
 
 Group-H Final Project Proposal
 
