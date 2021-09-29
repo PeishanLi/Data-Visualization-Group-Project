@@ -92,7 +92,7 @@ From graph 1 (The network of governors who mention Biden on Twitter), we can lea
 
 GavinNewsom (governor from California) have mentioned Biden the most times on Twitter while BrainKempGA (governor from Georgia) and KimReynoldsIA (governor from Iowa) have mentioned Trump the most times on Twitter. The COVID-19 cases in Georgia and Iowa are higher than that in California. To some extent, our hypothesis and assumption are proved.
 
-### Data Sources
+## Data Sources
 
 SAPE of each election Stewart, Charles, 2021, “2020 Survey of the Performance of American Elections”, https://doi.org/10.7910/DVN/FSGX7Z, Harvard Dataverse, V1, UNF:6:70KW4uouuTDT860MiPJq3A== [fileUNF]
 
